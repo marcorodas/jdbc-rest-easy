@@ -28,7 +28,7 @@
     <dependency>
       <groupId>com.github.marcorodas</groupId>
       <artifactId>jdbc-easy</artifactId>
-      <version>e9eef4b</version>
+      <version>92c69fd</version>
     </dependency>
     <dependency>
       <groupId>javax.ws.rs</groupId>
