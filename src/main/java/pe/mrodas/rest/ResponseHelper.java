@@ -16,6 +16,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 import pe.mrodas.jdbc.Connector;
 import pe.mrodas.jdbc.helper.ThrowingConsumer;
 import pe.mrodas.jdbc.helper.ThrowingFunction;
+import pe.mrodas.jdbc.helper.ThrowingRunnable;
 
 public class ResponseHelper<T> {
 
@@ -27,6 +28,13 @@ public class ResponseHelper<T> {
 
     public ResponseHelper(ThrowingFunction<Connection, T> function) {
         this.callable = function == null ? null : () -> Connector.batch(function);
+    }
+
+    public ResponseHelper(ThrowingRunnable runnable) {
+        this.callable = runnable == null ? null : () -> {
+            runnable.run();
+            return null;
+        };
     }
 
     public ResponseHelper(ThrowingConsumer<Connection> consumer) {
