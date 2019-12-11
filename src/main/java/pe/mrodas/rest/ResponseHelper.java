@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
 import java.text.SimpleDateFormat;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
@@ -20,44 +19,25 @@ import pe.mrodas.jdbc.helper.ThrowingFunction;
 
 public class ResponseHelper<T> {
 
-    private Callable<T> callable;
-    private Callable<List<T>> callableList;
-    private ThrowingFunction<List<T>, String> listToJson;
+    private final Callable<T> callable;
 
-    public ResponseHelper<T> set(ThrowingFunction<Connection, T> function) {
-        return this.set(() -> Connector.batch(function));
+    public ResponseHelper(Callable<T> callable) {
+        this.callable = callable;
     }
 
-    public ResponseHelper<T> set(ThrowingConsumer<Connection> consumer) {
-        return this.set(() -> {
+    public ResponseHelper(ThrowingFunction<Connection, T> function) {
+        this.callable = function == null ? null : () -> Connector.batch(function);
+    }
+
+    public ResponseHelper(ThrowingConsumer<Connection> consumer) {
+        this.callable = consumer == null ? null : () -> {
             Connector.batch(consumer);
             return null;
-        });
+        };
     }
 
-    public ResponseHelper<T> set(Callable<T> callable) {
-        this.callable = callable;
-        this.callableList = null;
-        return this;
-    }
-
-    public ResponseHelper<T> setForList(ThrowingFunction<Connection, List<T>> function) {
-        return this.setForList(() -> Connector.batch(function), null);
-    }
-
-    public ResponseHelper<T> setForList(ThrowingFunction<Connection, List<T>> function, ThrowingFunction<List<T>, String> listToJson) {
-        return this.setForList(() -> Connector.batch(function), listToJson);
-    }
-
-    public ResponseHelper<T> setForList(Callable<List<T>> callableList) {
-        return this.setForList(callableList, null);
-    }
-
-    public ResponseHelper<T> setForList(Callable<List<T>> callableList, ThrowingFunction<List<T>, String> listToJson) {
-        this.callable = null;
-        this.callableList = callableList;
-        this.listToJson = listToJson == null ? ResponseHelper::toJsonString : listToJson;
-        return this;
+    protected Callable<T> getCallable() {
+        return callable;
     }
 
     public Response getResponse() {
@@ -65,25 +45,17 @@ public class ResponseHelper<T> {
     }
 
     public Response getResponse(Consumer<Exception> onException) {
+        if (callable == null) return Response.ok().build();
         try {
-            if (callable != null) {
-                T entity = callable.call();
-                return entity == null ? Response.ok().build() : Response.ok(entity).build();
-            }
-            if (callableList != null) {
-                List<T> list = callableList.call();
-                if (list == null) return Response.ok().build();
-                String entity = listToJson.apply(list);
-                return Response.ok(entity).build();
-            }
+            T entity = callable.call();
+            return entity == null ? Response.ok().build() : Response.ok(entity).build();
         } catch (Exception e) {
             if (onException != null) onException.accept(e);
             return Response.serverError().type(MediaType.TEXT_PLAIN).entity(e.getMessage()).build();
         }
-        return Response.ok().build();
     }
 
-    private static String toJsonString(Object object) throws IOException {
+    static String toJsonString(Object object) throws IOException {
         return ResponseHelper.toJsonString(object, null);
     }
 
