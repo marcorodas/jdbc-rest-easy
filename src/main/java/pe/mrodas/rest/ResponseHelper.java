@@ -49,25 +49,40 @@ public class ResponseHelper<T> {
     }
 
     public Response getResponse() {
-        return this.getResponse(null);
+        return this.getResponse(null, null);
+    }
+
+    public Response getResponse(MediaType type) {
+        return this.getResponse(type, null);
     }
 
     public Response getResponse(Consumer<Exception> onException) {
-        if (callable == null) return Response.ok().build();
+        return this.getResponse(null, onException);
+    }
+
+    public Response getResponse(MediaType type, Consumer<Exception> onException) {
+        if (callable == null) return ResponseHelper.getResponseOk(type, null);
         try {
             T entity = callable.call();
-            return entity == null ? Response.ok().build() : Response.ok(entity).build();
+            return ResponseHelper.getResponseOk(type, entity);
         } catch (Exception e) {
             if (onException != null) onException.accept(e);
             return Response.serverError().type(MediaType.TEXT_PLAIN).entity(e.getMessage()).build();
         }
     }
 
-    static String toJsonString(Object object) throws IOException {
-        return ResponseHelper.toJsonString(object, null);
+    protected static Response getResponseOk(MediaType type, Object entity) {
+        Response.ResponseBuilder builder = type == null
+                ? entity == null ? Response.ok() : Response.ok(entity)
+                : entity == null ? Response.ok().type(type) : Response.ok(entity, type);
+        return builder.build();
     }
 
-    private static String toJsonString(Object object, String dateFormat) throws IOException {
+    static String objtoJson(Object object) throws IOException {
+        return ResponseHelper.objtoJson(object, null);
+    }
+
+    private static String objtoJson(Object object, String dateFormat) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         SimpleDateFormat format = dateFormat == null || dateFormat.isEmpty()
                 ? new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")

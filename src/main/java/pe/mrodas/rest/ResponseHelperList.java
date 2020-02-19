@@ -37,20 +37,29 @@ public class ResponseHelperList<T> {
     }
 
     public Response getResponse() {
-        return this.getResponse(null);
+        return this.getResponse(null, null);
+    }
+
+    public Response getResponse(MediaType type) {
+        return this.getResponse(type, null);
     }
 
     public Response getResponse(Consumer<Exception> onException) {
-        if (responseHelper.getCallable() == null) return Response.ok().build();
+        return this.getResponse(null, onException);
+    }
+
+    public Response getResponse(MediaType type, Consumer<Exception> onException) {
+        if (responseHelper.getCallable() == null) return ResponseHelper.getResponseOk(type, null);
         try {
             List<T> list = responseHelper.getCallable().call();
-            if (list == null) return Response.ok().build();
+            if (list == null) return ResponseHelper.getResponseOk(type, null);
             String entity = listToJson == null
-                    ? ResponseHelper.toJsonString(list) : listToJson.apply(list);
-            return Response.ok().entity(entity).build();
+                    ? ResponseHelper.objtoJson(list) : listToJson.apply(list);
+            return ResponseHelper.getResponseOk(type, entity);
         } catch (Exception e) {
             if (onException != null) onException.accept(e);
             return Response.serverError().type(MediaType.TEXT_PLAIN).entity(e.getMessage()).build();
         }
     }
+
 }
