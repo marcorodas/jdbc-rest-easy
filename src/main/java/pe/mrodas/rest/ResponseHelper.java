@@ -5,7 +5,6 @@ import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
 import java.io.File;
-import java.io.IOException;
 import java.sql.Connection;
 import java.text.SimpleDateFormat;
 import java.util.concurrent.Callable;
@@ -21,6 +20,7 @@ import pe.mrodas.jdbc.helper.ThrowingRunnable;
 public class ResponseHelper<T> {
 
     private final Callable<T> callable;
+    private MediaType mediaType;
 
     public ResponseHelper(Callable<T> callable) {
         this.callable = callable;
@@ -48,51 +48,79 @@ public class ResponseHelper<T> {
         return callable;
     }
 
-    public Response getResponse() {
-        return this.getResponse(null, null);
+    public void setMediaType(MediaType mediaType) {
+        this.mediaType = mediaType;
     }
 
-    public Response getResponse(MediaType type) {
-        return this.getResponse(type, null);
+    public Response getResponse() {
+        return this.getResponse(null);
+    }
+
+    protected Response.ResponseBuilder getResponseOkBuilder(T entity) {
+        if (entity == null) return mediaType == null ? Response.ok() : Response.ok().type(mediaType);
+        return mediaType == null ? Response.ok(entity) : Response.ok(entity, mediaType);
     }
 
     public Response getResponse(Consumer<Exception> onException) {
-        return this.getResponse(null, onException);
-    }
-
-    public Response getResponse(MediaType type, Consumer<Exception> onException) {
-        if (callable == null) return ResponseHelper.getResponseOk(type, null);
+        if (callable == null) return this.getResponseOkBuilder(null).build();
         try {
             T entity = callable.call();
-            return ResponseHelper.getResponseOk(type, entity);
+            return this.getResponseOkBuilder(entity).build();
         } catch (Exception e) {
             if (onException != null) onException.accept(e);
-            return Response.serverError().type(MediaType.TEXT_PLAIN).entity(e.getMessage()).build();
+            return Response.serverError().type(MediaType.TEXT_PLAIN)
+                    .entity(e.getMessage()).build();
         }
     }
 
-    protected static Response getResponseOk(MediaType type, Object entity) {
-        Response.ResponseBuilder builder = type == null
-                ? entity == null ? Response.ok() : Response.ok(entity)
-                : entity == null ? Response.ok().type(type) : Response.ok(entity, type);
-        return builder.build();
-    }
+    public static class Json<T> extends ResponseHelper<T> {
 
-    static String objtoJson(Object object) throws IOException {
-        return ResponseHelper.objtoJson(object, null);
-    }
+        private String dateFormat;
 
-    private static String objtoJson(Object object, String dateFormat) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
-        SimpleDateFormat format = dateFormat == null || dateFormat.isEmpty()
-                ? new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
-                : new SimpleDateFormat(dateFormat);
-        mapper.setDateFormat(format);
-        return mapper.writeValueAsString(object);
+        public Json(Callable<T> callable) {
+            super(callable);
+            super.setMediaType(MediaType.APPLICATION_JSON_TYPE);
+        }
+
+        public Json(ThrowingFunction<Connection, T> function) {
+            super(function);
+            super.setMediaType(MediaType.APPLICATION_JSON_TYPE);
+        }
+
+        public Json(ThrowingRunnable runnable) {
+            super(runnable);
+            super.setMediaType(MediaType.APPLICATION_JSON_TYPE);
+        }
+
+        public Json(ThrowingConsumer<Connection> consumer) {
+            super(consumer);
+            super.setMediaType(MediaType.APPLICATION_JSON_TYPE);
+        }
+
+        public Json<T> setDateFormat(String dateFormat) {
+            this.dateFormat = dateFormat;
+            return this;
+        }
+
+        private ObjectMapper getNewObjectMapper() {
+            ObjectMapper mapper = new ObjectMapper();
+            String format = dateFormat == null || dateFormat.isEmpty()
+                    ? "yyyy-MM-dd'T'HH:mm:ss" : dateFormat;
+            mapper.setDateFormat(new SimpleDateFormat(format));
+            return mapper;
+        }
+
+        public Response.ResponseBuilder getResponseOkBuilder(T entity, ThrowingFunction<T, String> toJson) throws Exception {
+            if (entity == null) return super.getResponseOkBuilder(null);
+            String json = toJson == null
+                    ? this.getNewObjectMapper().writeValueAsString(entity)
+                    : toJson.apply(entity);
+            return Response.ok(json, MediaType.APPLICATION_JSON_TYPE);
+        }
     }
 
     public static Response toResponse(File attach) {
-        return toResponse(attach, attach.getName());
+        return ResponseHelper.toResponse(attach, attach.getName());
     }
 
     public static Response toResponse(File attach, String fileName) {
